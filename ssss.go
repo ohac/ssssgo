@@ -21,26 +21,18 @@
  * http://point-at-infinity.org/ssss/
  *
  * This is an implementation of Shamir's Secret Sharing Scheme. See
- * the project's homepage http://point-at-infinity.org/ssss/ for more
- * information on this topic.
  *
- * This code links against the GNU multiprecision library "libgmp".
- * I compiled the code successfully with gmp 4.1.4.
  * You will need a system that has a /dev/random entropy source.
- *
- * Compile with
- * "gcc -O2 -lgmp -o ssss-split ssss.c && ln ssss-split ssss-combine"
- *
- * Compile with -DNOMLOCK to obtain a version without memory locking.
- *
- * Report bugs to: ssss AT point-at-infinity.org
  */
 
 package main
 
 import (
+	"flag"
 	"fmt"
-  "github.com/ncw/gmp"
+	"github.com/ncw/gmp"
+	"log"
+	"os"
 )
 
 var VERSION string = "0.5"
@@ -64,13 +56,10 @@ var irred_coeff = []byte{
 	3, 1, 15, 7, 5, 19, 18, 10, 7, 5, 3, 12, 7, 2, 7, 5, 1, 14, 9, 6, 10, 3, 2, 15, 13, 12, 12, 11, 9, 16,
 	9, 7, 12, 9, 3, 9, 5, 2, 17, 10, 6, 24, 9, 3, 17, 15, 13, 5, 4, 3, 19, 17, 8, 15, 6, 3, 19, 6, 1}
 
-var opt_showversion bool
-var opt_help bool
 var opt_quiet bool
 var opt_QUIET bool
 var opt_hex bool
 var opt_diffusion bool = true
-var opt_security int
 var opt_threshold int = -1
 var opt_number int = -1
 
@@ -89,19 +78,11 @@ var cprng int
 
 // emergency abort and warning functions
 
-func fatal(msg string) {
-/*
-  tcsetattr(0, TCSANOW, &echo_orig)
-  fprintf(stderr, "%sFATAL: %s.\n", isatty(2) ? "\a" : "", msg)
-  exit(1)
-*/
-}
-
 func warning(msg string) {
-/*
-  if (! opt_QUIET)
-    fprintf(stderr, "%sWARNING: %s.\n", isatty(2) ? "\a" : "", msg)
-*/
+	/*
+	   if (! opt_QUIET)
+	     fprintf(stderr, "%sWARNING: %s.\n", isatty(2) ? "\a" : "", msg)
+	*/
 }
 
 /* field arithmetic routines */
@@ -133,22 +114,22 @@ func field_deinit() {
 func field_import(x gmp.Int, s string, hexmode bool) {
 	if hexmode {
 		if len(s) > int(degree)/4 {
-			fatal("input string too long")
+			log.Fatal("input string too long")
 		}
 		if len(s) < int(degree)/4 {
 			warning("input string too short, adding null padding on the left")
 		}
-    /*
-		if mpz_set_str(x, s, 16) || mpz_cmp_ui(x, 0) < 0 {
-			fatal("invalid syntax")
-		}
-    */
+		/*
+					if mpz_set_str(x, s, 16) || mpz_cmp_ui(x, 0) < 0 {
+		        log.Fatal("invalid syntax")
+					}
+		*/
 	} else {
 		var warn bool
 		if len(s) > int(degree)/8 {
-			fatal("input string too long")
+			log.Fatal("input string too long")
 		}
-    for i := len(s) - 1; i >= 0; i-- {
+		for i := len(s) - 1; i >= 0; i-- {
 			warn = warn || s[i] < 32 || s[i] >= 127
 		}
 		if warn {
@@ -158,14 +139,14 @@ func field_import(x gmp.Int, s string, hexmode bool) {
 	}
 }
 
-func field_print(stream int/* *FILE*/, x gmp.Int, hexmode bool) {
+func field_print(stream int /* *FILE*/, x gmp.Int, hexmode bool) {
 	//var i int
 	if hexmode {
-    /*
-		for i = degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
-			//fprintf(stream, "0")
-		}
-    */
+		/*
+			for i = degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
+				//fprintf(stream, "0")
+			}
+		*/
 		//mpz_out_str(stream, 16, x)
 		//fprintf(stream, "\n")
 	} else {
@@ -197,24 +178,24 @@ func field_mult(z gmp.Int, x gmp.Int, y gmp.Int) {
 	//var b gmp.Int
 	var i uint
 	//assert(z != y)
-  /*
-	mpz_init_set(b, x)
-	if mpz_tstbit(y, 0) {
-		//mpz_set(z, b)
-	} else {
-		//mpz_set_ui(z, 0)
-	}
-  */
+	/*
+		mpz_init_set(b, x)
+		if mpz_tstbit(y, 0) {
+			//mpz_set(z, b)
+		} else {
+			//mpz_set_ui(z, 0)
+		}
+	*/
 	for i = 1; i < degree; i++ {
 		//mpz_lshift(b, b, 1)
-    /*
-		if mpz_tstbit(b, degree) {
-			//mpz_xor(b, b, poly)
-		}
-		if mpz_tstbit(y, i) {
-			//mpz_xor(z, z, b)
-		}
-    */
+		/*
+			if mpz_tstbit(b, degree) {
+				//mpz_xor(b, b, poly)
+			}
+			if mpz_tstbit(y, i) {
+				//mpz_xor(z, z, b)
+			}
+		*/
 	}
 	//mpz_clear(b)
 }
@@ -228,20 +209,20 @@ func field_invert(z gmp.Int, x gmp.Int) {
 	//mpz_init_set_ui(g, 0)
 	//mpz_set_ui(z, 1)
 	//mpz_init(h)
-  /*
-	for mpz_cmp_ui(u, 1) {
-		i = mpz_sizeinbits(u) - mpz_sizeinbits(v)
-		if i < 0 {
-			//mpz_swap(u, v)
-			//mpz_swap(z, g)
-			i = -i
+	/*
+		for mpz_cmp_ui(u, 1) {
+			i = mpz_sizeinbits(u) - mpz_sizeinbits(v)
+			if i < 0 {
+				//mpz_swap(u, v)
+				//mpz_swap(z, g)
+				i = -i
+			}
+			//mpz_lshift(h, v, i)
+			//mpz_xor(u, u, h)
+			//mpz_lshift(h, g, i)
+			//mpz_xor(z, z, h)
 		}
-		//mpz_lshift(h, v, i)
-		//mpz_xor(u, u, h)
-		//mpz_lshift(h, g, i)
-		//mpz_xor(z, z, h)
-	}
-  */
+	*/
 	//mpz_clear(u)
 	//mpz_clear(v)
 	//mpz_clear(g)
@@ -251,20 +232,20 @@ func field_invert(z gmp.Int, x gmp.Int) {
 // routines for the random number generator
 
 func cprng_init() {
-  /*
-	cprng = open(RANDOM_SOURCE, O_RDONLY)
-	if cprng < 0 {
-		fatal("couldn't open " + RANDOM_SOURCE)
-	}
-  */
+	/*
+		cprng = open(RANDOM_SOURCE, O_RDONLY)
+		if cprng < 0 {
+			log.Fatal("couldn't open " + RANDOM_SOURCE)
+		}
+	*/
 }
 
 func cprng_deinit() {
-  /*
-	if cclose(cprng) < 0 {
-		fatal("couldn't close " + RANDOM_SOURCE)
-	}
-  */
+	/*
+		if cclose(cprng) < 0 {
+			log.Fatal("couldn't close " + RANDOM_SOURCE)
+		}
+	*/
 }
 
 func cprng_read(x gmp.Int) {
@@ -272,13 +253,13 @@ func cprng_read(x gmp.Int) {
 	var count uint
 	var i uint
 	for count = 0; count < degree/8; count += i {
-    /*
-		i = read(cprng, buf+count, degree/8-count)
-		if i < 0 {
-			cclose(cprng)
-			//fatal("couldn't read from " RANDOM_SOURCE)
-		}
-    */
+		/*
+					i = read(cprng, buf+count, degree/8-count)
+					if i < 0 {
+						cclose(cprng)
+		        log.Fatal("couldn't read from " RANDOM_SOURCE)
+					}
+		*/
 	}
 	//mpz_import(x, degree/8, 1, 1, 0, 0, buf)
 }
@@ -308,11 +289,11 @@ func decipher_block(v []uint32) {
 func encode_slice(data []byte, idx, leng int, process_block func([]uint32)) {
 	v := make([]uint32, 2)
 	for i := 0; i < 2; i++ {
-    /*
-		v[i] = data[(idx+4*i)%leng]<<24 |
-			data[(idx+4*i+1)%leng]<<16 |
-			data[(idx+4*i+2)%leng]<<8 | data[(idx+4*i+3)%leng]
-    */
+		/*
+			v[i] = data[(idx+4*i)%leng]<<24 |
+				data[(idx+4*i+1)%leng]<<16 |
+				data[(idx+4*i+2)%leng]<<8 | data[(idx+4*i+3)%leng]
+		*/
 	}
 	process_block(v)
 	for i := 0; i < 2; i++ {
@@ -326,8 +307,8 @@ func encode_slice(data []byte, idx, leng int, process_block func([]uint32)) {
 type encdec int
 
 const (
-  ENCODE encdec = iota
-  DECODE
+	ENCODE encdec = iota
+	DECODE
 )
 
 func encode_mpz(x gmp.Int, encdecmode encdec) {
@@ -384,36 +365,36 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 	//mpz_init(h)
 	for i = 0; i < n; i++ {
 		//if !mpz_cmp_ui(AA[i][i], 0) {
-			found := false
-			for j = i + 1; j < n; j++ {
-        /*
+		found := false
+		for j = i + 1; j < n; j++ {
+			/*
 				if mpz_cmp_ui(AA[i][j], 0) {
 					found = 1
 					break
 				}
-        */
-			}
-			if !found {
-				return -1
-			}
-			for k = i; k < n; k++ {
-				//MPZ_SWAP(AA[k][i], AA[k][j])
-			}
-			//MPZ_SWAP(b[i], b[j])
+			*/
+		}
+		if !found {
+			return -1
+		}
+		for k = i; k < n; k++ {
+			//MPZ_SWAP(AA[k][i], AA[k][j])
+		}
+		//MPZ_SWAP(b[i], b[j])
 		//}
 		for j = i + 1; j < n; j++ {
-      /*
-			if mpz_cmp_ui(AA[i][j], 0) {
-				for k = i + 1; k < n; k++ {
-					field_mult(h, AA[k][i], AA[i][j])
-					field_mult(AA[k][j], AA[k][j], AA[i][i])
-					field_add(AA[k][j], AA[k][j], h)
+			/*
+				if mpz_cmp_ui(AA[i][j], 0) {
+					for k = i + 1; k < n; k++ {
+						field_mult(h, AA[k][i], AA[i][j])
+						field_mult(AA[k][j], AA[k][j], AA[i][i])
+						field_add(AA[k][j], AA[k][j], h)
+					}
+					field_mult(h, b[i], AA[i][j])
+					field_mult(b[j], b[j], AA[i][i])
+					field_add(b[j], b[j], h)
 				}
-				field_mult(h, b[i], AA[i][j])
-				field_mult(b[j], b[j], AA[i][i])
-				field_add(b[j], b[j], h)
-			}
-      */
+			*/
 		}
 	}
 	//field_invert(h, AA[n-1][n-1])
@@ -424,28 +405,28 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 
 // Prompt for a secret, generate shares for it
 
-func split() {
-	var fmt_len uint
+func split(opt_security int) {
+	var fmt_len uint = 1
 	//var x, y gmp.Int
 	coeff := make([]gmp.Int, opt_threshold)
 	buf := make([]byte, MAXLINELEN)
 	//var deg int
 	var i int
-	fmt_len = 1
 	for i := opt_number; i >= 10; i /= 10 {
 		fmt_len++
 	}
 
 	if !opt_quiet {
-		fmt.Println("Generating shares using a (%d,%d) scheme with ", opt_threshold, opt_number)
+		fmt.Printf("Generating shares using a (%d,%d) scheme with ",
+			opt_threshold, opt_number)
 		if opt_security > 0 {
-			fmt.Println("a %d bit", opt_security)
+			fmt.Print("a %d bit", opt_security)
 		} else {
-			fmt.Println("dynamic")
+			fmt.Print("dynamic")
 		}
 		fmt.Println(" security level.")
 		//deg = opt_security ? opt_security : MAXDEGREE
-		//fprintf(stderr, "Enter the secret, ")
+		fmt.Print("Enter the secret, ")
 		if opt_hex {
 			//fprintf(stderr, "as most %d hex digits: ", deg/4)
 		} else {
@@ -458,7 +439,7 @@ func split() {
 	if opt_security == 0 {
 		//opt_security = opt_hex ? 4 * ((len(buf) + 1) & ~1): 8 * len(buf)
 		if !field_size_valid(opt_security) {
-			fatal("security level invalid (secret too long?)")
+			log.Fatal("security level invalid (secret too long?)")
 		}
 		if !opt_quiet {
 			//fprintf(stderr, "Using a %d bit security level.\n", opt_security)
@@ -511,7 +492,7 @@ func combine() {
 	//gmp.Int A[opt_threshold][opt_threshold], y[opt_threshold], x
 	//char buf[MAXLINELEN]
 	//char *a, *b
-  var b []byte
+	var b []byte
 	//int i, j
 	var s uint
 
@@ -524,50 +505,50 @@ func combine() {
 			fmt.Println("Share [%d/%d]: ", i+1, opt_threshold)
 		}
 
-    /*
-		if !fgets(buf, sizeof(buf), stdin) {
-			fatal("I/O error while reading shares")
-		}
-    */
+		/*
+					if !fgets(buf, sizeof(buf), stdin) {
+		        log.Fatal("I/O error while reading shares")
+					}
+		*/
 		//buf[strcspn(buf, "\r\n")] = '\0'
-    /*
-		a = strchr(buf, '-')
-		if !a {
-			fatal("invalid syntax")
-		}
-    */
+		/*
+					a = strchr(buf, '-')
+					if !a {
+		        log.Fatal("invalid syntax")
+					}
+		*/
 		//*a++ = 0
-    /*
-		b = strchr(a, '-')
-		if b {
-			//*b++ = 0
-		} else {
-			b = a
-			a = buf
-		}
-    */
+		/*
+			b = strchr(a, '-')
+			if b {
+				//*b++ = 0
+			} else {
+				b = a
+				a = buf
+			}
+		*/
 
 		if s == 0 {
 			s = uint(4 * len(b))
 			if !field_size_valid(int(s)) {
-				fatal("share has illegal length")
+				log.Fatal("share has illegal length")
 			}
 			field_init(int(s))
 		} else {
 			if s != uint(4*len(b)) {
-				fatal("shares have different security levels")
+				log.Fatal("shares have different security levels")
 			}
 		}
 
-    //j := atoi(a)
-    /*
-		if j == 0 {
-			fatal("invalid share")
-		}
-    */
+		//j := atoi(a)
+		/*
+			if j == 0 {
+			log.Fatal("invalid share")
+			}
+		*/
 		//mpz_set_ui(x, j)
 		//mpz_init_set_ui(A[opt_threshold-1][i], 1)
-    for j := opt_threshold - 2; j >= 0; j-- {
+		for j := opt_threshold - 2; j >= 0; j-- {
 			//mpz_init(A[j][i])
 			//field_mult(A[j][i], A[j+1][i], x)
 		}
@@ -577,11 +558,11 @@ func combine() {
 		//field_add(y[i], y[i], x)
 	}
 	//mpz_clear(x)
-  /*
-	if restore_secret(opt_threshold, A, y) != 0 {
-		fatal("shares inconsistent. Perhaps a single share was used twice")
-	}
-  */
+	/*
+		if restore_secret(opt_threshold, A, y) != 0 {
+			log.Fatal("shares inconsistent. Perhaps a single share was used twice")
+		}
+	*/
 
 	if opt_diffusion {
 		if degree >= 64 {
@@ -596,8 +577,8 @@ func combine() {
 	}
 	//field_print(stderr, y[opt_threshold-1], opt_hex)
 
-  for i := 0; i < opt_threshold; i++ {
-    for j := 0; j < opt_threshold; j++ {
+	for i := 0; i < opt_threshold; i++ {
+		for j := 0; j < opt_threshold; j++ {
 			//mpz_clear(A[i][j])
 		}
 		//mpz_clear(y[i])
@@ -606,104 +587,75 @@ func combine() {
 }
 
 func main() {
-	//var name string
-	//var i int
-
 	// TODO mlockall
 	// TODO seteuid
 	// TODO echo off
 
-  argc := 0 // TODO
-	opt_help = argc == 1
-	//for ;((i = getopt(argc, argv, "vDhqQxs:t:n:w:")) != -1);
+	opt_showversion := flag.Bool("v", false, "show version")
+	opt_diffusion := flag.Bool("D", false, "opt_diffusion")
+	opt_help := flag.Bool("h", false, "help")
+	opt_quiet := flag.Bool("q", false, "quiet")
+	opt_QUIET := flag.Bool("Q", false, "QUIET")
+	opt_hex := flag.Bool("x", false, "hex")
 
-  /*
-	{
-		{
-		case 'v':
-			opt_showversion = true
-		case 'h':
-			opt_help = true
-		case 'q':
-			opt_quiet = true
-		case 'Q':
-			opt_QUIET = true
-			opt_quiet = true
-		case 'x':
-			opt_hex = true
-		case 's':
-			opt_security = atoi(optarg)
-		case 't':
-			opt_threshold = atoi(optarg)
-		case 'n':
-			opt_number = atoi(optarg)
-		case 'w':
-			opt_token = optarg
-		case 'D':
-			opt_diffusion = false
-		default:
-			exit(1)
-		}
-	}
-	if !opt_help && argc != optind {
-		fatal("invalid argument")
-	}
-  */
+	opt_security := flag.Int("s", 0, "security")
+	opt_threshold := flag.Int("t", -1, "threshold")
+	opt_number := flag.Int("n", -1, "number")
+	opt_token := flag.String("w", "", "token")
 
-  /*
-	name = strrchr(argv[0], '/')
-	if name == nil {
-		name = argv[0]
-	}
-  */
+	_ = opt_diffusion
+	_ = opt_hex
 
-  // TODO まずは split だけ動くことを目標に
-	if strstr(name, "split") {
-  /*
-		if opt_help || opt_showversion {
+	flag.Parse()
+
+	if *opt_QUIET {
+		opt_quiet = opt_QUIET
+	}
+	_ = opt_quiet
+
+	args := flag.Args()
+	name := args[0]
+
+	if name == "split" {
+		if *opt_help || *opt_showversion {
 			fmt.Println("Split secrets using Shamir's Secret Sharing Scheme.\n" +
 				"\n" +
-				"ssss-split -t threshold -n shares [-w token] [-s level]" +
-				" [-x] [-q] [-Q] [-D] [-v]")
-			if opt_showversion {
+				"ssss -t threshold -n shares [-w token] [-s level]" +
+				" [-x] [-q] [-Q] [-D] [-v] split")
+			if *opt_showversion {
 				fmt.Println("\nVersion: " + VERSION)
 			}
-			exit(0)
+			os.Exit(0)
 		}
 
-		if opt_threshold < 2 {
-			fatal("invalid parameters: invalid threshold value")
+		if *opt_threshold < 2 {
+			log.Fatal("invalid parameters: invalid threshold value")
+		}
+		if *opt_number < *opt_threshold {
+			log.Fatal("invalid parameters: number of shares smaller than threshold")
 		}
 
-		if opt_number < opt_threshold {
-			fatal("invalid parameters: number of shares smaller than threshold")
+		if *opt_security != 0 && !field_size_valid(*opt_security) {
+			log.Fatal("invalid parameters: invalid security level")
 		}
 
-		if opt_security && !field_size_valid(opt_security) {
-			fatal("invalid parameters: invalid security level")
+		if *opt_token != "" && len(*opt_token) > MAXTOKENLEN {
+			log.Fatal("invalid parameters: token too long")
 		}
-
-		if opt_token != "" && len(opt_token) > MAXTOKENLEN {
-			fatal("invalid parameters: token too long")
-		}
-		split()
-    */
+		split(*opt_security)
 	} else {
-    // TODO 次に combine を
-    /*
-		if opt_help || opt_showversion {
+		if *opt_help || *opt_showversion {
 			fmt.Println("Combine shares using Shamir's Secret Sharing Scheme.\n" +
 				"\n" +
-				"ssss-combine -t threshold [-x] [-q] [-Q] [-D] [-v]")
-			if opt_showversion {
+				"ssss -t threshold [-x] [-q] [-Q] [-D] [-v]")
+			if *opt_showversion {
 				fmt.Println("\nVersion: " + VERSION)
 			}
-			exit(0)
+			os.Exit(0)
 		}
-		if opt_threshold < 2 {
-			fatal("invalid parameters: invalid threshold value")
+		if *opt_threshold < 2 {
+			log.Fatal("invalid parameters: invalid threshold value")
 		}
 		combine()
-    */
 	}
 }

@@ -31,8 +31,9 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/ncw/gmp"
+	//big "github.com/ncw/gmp"
 	"log"
+	"math/big"
 	"os"
 )
 
@@ -66,7 +67,7 @@ var opt_token string
 
 var degree uint
 
-var poly gmp.Int
+var poly big.Int
 
 var cprng int
 
@@ -106,7 +107,7 @@ func field_init(deg int) {
 
 // I/O routines for GF(2^deg) field elements
 
-func field_import(x *gmp.Int, s string, hexmode bool) {
+func field_import(x *big.Int, s string, hexmode bool) {
 	if hexmode {
 		if len(s) > int(degree)/4 {
 			log.Fatal("input string too long")
@@ -133,7 +134,7 @@ func field_import(x *gmp.Int, s string, hexmode bool) {
 	}
 }
 
-func field_print(x gmp.Int, hexmode bool) {
+func field_print(x big.Int, hexmode bool) {
 	if false /*hexmode*/ {
 		/*
 			for i := degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
@@ -165,12 +166,12 @@ func field_print(x gmp.Int, hexmode bool) {
 
 // basic field arithmetic in GF(2^deg)
 
-func field_add(z, x, y *gmp.Int) {
+func field_add(z, x, y *big.Int) {
 	z.Xor(x, y)
 }
 
-func field_mult(z, x, y *gmp.Int) {
-	var b gmp.Int
+func field_mult(z, x, y *big.Int) {
+	var b big.Int
 	var i uint
 	// assert(z != y)
 	b.Set(x)
@@ -190,7 +191,7 @@ func field_mult(z, x, y *gmp.Int) {
 	}
 }
 
-func field_invert(z gmp.Int, x gmp.Int) {
+func field_invert(z, x big.Int) {
 	//var u, v, g, h gmp.Int
 	//var i int
 	//assert(mpz_cmp_ui(x, 0))
@@ -238,7 +239,7 @@ func cprng_deinit() {
 	*/
 }
 
-func cprng_read(x *gmp.Int) {
+func cprng_read(x *big.Int) {
 	//buf := make([]byte, MAXDEGREE/8)
 	buf := make([]byte, degree/8)
 	/*
@@ -302,7 +303,7 @@ const (
 	DECODE
 )
 
-func encode_mpz(x *gmp.Int, encdecmode encdec) {
+func encode_mpz(x *big.Int, encdecmode encdec) {
 	v := make([]uint8, (MAXDEGREE+8)/16*2)
 	//var t uint32
 	//var i int
@@ -332,7 +333,7 @@ func encode_mpz(x *gmp.Int, encdecmode encdec) {
 
 // evaluate polynomials efficiently
 
-func horner(n int, y, x *gmp.Int, coeff []*gmp.Int) {
+func horner(n int, y, x *big.Int, coeff []*big.Int) {
 	y.Set(x) //mpz_set(y, x)
 	for i := n - 1; i != 0; i-- {
 		field_add(y, y, coeff[i])
@@ -348,11 +349,11 @@ func horner(n int, y, x *gmp.Int, coeff []*gmp.Int) {
   do { mpz_set(h, A); mpz_set(A, B); mpz_set(B, h); } while(0)
 */
 
-func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
-	//gmp.Int (*AA)[n] = (gmp.Int (*)[n])A
+func restore_secret(n int /*, big.Int (*A)[n]*/, b []big.Int) int {
+	//big.Int (*AA)[n] = (big.Int (*)[n])A
 	//var found int
 	var i, j, k int
-	//var h gmp.Int
+	//var h big.Int
 	//mpz_init(h)
 	for i = 0; i < n; i++ {
 		//if !mpz_cmp_ui(AA[i][i], 0) {
@@ -398,9 +399,9 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 
 func split(opt_threshold, opt_number, opt_security int) {
 	var fmt_len uint = 1
-	coeff := make([]*gmp.Int, opt_threshold)
+	coeff := make([]*big.Int, opt_threshold)
 	for i := range coeff {
-		coeff[i] = new(gmp.Int)
+		coeff[i] = new(big.Int)
 	}
 	for i := opt_number; i >= 10; i /= 10 {
 		fmt_len++
@@ -468,7 +469,7 @@ func split(opt_threshold, opt_number, opt_security int) {
 	}
 	cprng_deinit()
 
-	var x, y gmp.Int
+	var x, y big.Int
 	for i := 0; i < opt_number; i++ {
 		x.SetUint64(uint64(i + 1)) // mpz_set_ui(x, i+1)
 		horner(opt_threshold, &y, &x, coeff)
@@ -483,9 +484,9 @@ func split(opt_threshold, opt_number, opt_security int) {
 // Prompt for shares, calculate the secret
 
 func combine(opt_threshold int) {
-	//A := make([]gmp.Int, opt_threshold) // A[opt_threshold][opt_threshold]
-	y := make([]gmp.Int, opt_threshold)
-	var x gmp.Int
+	//A := make([]big.Int, opt_threshold) // A[opt_threshold][opt_threshold]
+	y := make([]big.Int, opt_threshold)
+	var x big.Int
 	_ = x
 	//char buf[MAXLINELEN]
 	//char *a, *b

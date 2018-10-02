@@ -78,10 +78,10 @@ var cprng int
 // emergency abort and warning functions
 
 func warning(msg string) {
-	/*
-	   if (! opt_QUIET)
-	     fprintf(stderr, "%sWARNING: %s.\n", isatty(2) ? "\a" : "", msg)
-	*/
+	if opt_QUIET {
+		return
+	}
+	fmt.Printf("WARNING: %s.\n", msg)
 }
 
 /* field arithmetic routines */
@@ -106,7 +106,7 @@ func field_init(deg int) {
 
 // I/O routines for GF(2^deg) field elements
 
-func field_import(x gmp.Int, s string, hexmode bool) {
+func field_import(x *gmp.Int, s string, hexmode bool) {
 	if hexmode {
 		if len(s) > int(degree)/4 {
 			log.Fatal("input string too long")
@@ -134,7 +134,7 @@ func field_import(x gmp.Int, s string, hexmode bool) {
 }
 
 func field_print(x gmp.Int, hexmode bool) {
-	if hexmode {
+	if false /*hexmode*/ {
 		/*
 			for i := degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
 				fmt.Print("0")
@@ -143,17 +143,15 @@ func field_print(x gmp.Int, hexmode bool) {
 		//mpz_out_str(stream, 16, x)
 		//fprintf(stream, "\n")
 	} else {
-		buf := make([]byte, MAXDEGREE/8+1)
-		var t uint32
-		var i uint32
 		var printable, warn bool
-		//memset(buf, 0, degree / 8 + 1)
-		//mpz_export(buf, &t, 1, 1, 0, 0, x)
-		for i = 0; i < t; i++ {
-			printable = (buf[i] >= 32) && (buf[i] < 127)
+		buf := x.Bytes()
+		for _, b := range buf {
+			printable = (b >= 32) && (b < 127)
 			warn = warn || !printable
 			if printable {
-				fmt.Printf("%c", buf[i])
+				fmt.Printf("%c", b)
+			} else if hexmode {
+				fmt.Printf("%02x", b) // TODO
 			} else {
 				fmt.Printf(".")
 			}
@@ -167,34 +165,29 @@ func field_print(x gmp.Int, hexmode bool) {
 
 // basic field arithmetic in GF(2^deg)
 
-func field_add(z gmp.Int, x gmp.Int, y gmp.Int) {
-	//mpz_xor(z, x, y)
+func field_add(z, x, y *gmp.Int) {
+	z.Xor(x, y)
 }
 
-func field_mult(z gmp.Int, x gmp.Int, y gmp.Int) {
-	//var b gmp.Int
+func field_mult(z, x, y *gmp.Int) {
+	var b gmp.Int
 	var i uint
-	//assert(z != y)
-	/*
-		mpz_init_set(b, x)
-		if mpz_tstbit(y, 0) {
-			//mpz_set(z, b)
-		} else {
-			//mpz_set_ui(z, 0)
-		}
-	*/
+	// assert(z != y)
+	b.Set(x)
+	if y.Bit(0) != 0 {
+		z.Set(&b)
+	} else {
+		z.SetUint64(0)
+	}
 	for i = 1; i < degree; i++ {
 		//mpz_lshift(b, b, 1)
-		/*
-			if mpz_tstbit(b, degree) {
-				//mpz_xor(b, b, poly)
-			}
-			if mpz_tstbit(y, i) {
-				//mpz_xor(z, z, b)
-			}
-		*/
+		if b.Bit(int(degree)) != 0 {
+			b.Xor(&b, &poly)
+		}
+		if y.Bit(int(i)) != 0 {
+			z.Xor(z, &b)
+		}
 	}
-	//mpz_clear(b)
 }
 
 func field_invert(z gmp.Int, x gmp.Int) {
@@ -207,18 +200,18 @@ func field_invert(z gmp.Int, x gmp.Int) {
 	//mpz_set_ui(z, 1)
 	//mpz_init(h)
 	/*
-		for mpz_cmp_ui(u, 1) {
-			i = mpz_sizeinbits(u) - mpz_sizeinbits(v)
-			if i < 0 {
-				//mpz_swap(u, v)
-				//mpz_swap(z, g)
-				i = -i
-			}
-			//mpz_lshift(h, v, i)
-			//mpz_xor(u, u, h)
-			//mpz_lshift(h, g, i)
-			//mpz_xor(z, z, h)
-		}
+				for mpz_cmp_ui(u, 1) {
+					i = mpz_sizeinbits(u) - mpz_sizeinbits(v)
+					if i < 0 {
+						//mpz_swap(u, v)
+						//mpz_swap(z, g)
+						i = -i
+					}
+					//mpz_lshift(h, v, i)
+		      u.Xor(&u, &h)
+					//mpz_lshift(h, g, i)
+		      z.Xor(&z, &h)
+				}
 	*/
 	//mpz_clear(u)
 	//mpz_clear(v)
@@ -245,20 +238,21 @@ func cprng_deinit() {
 	*/
 }
 
-func cprng_read(x gmp.Int) {
+func cprng_read(x *gmp.Int) {
 	//buf := make([]byte, MAXDEGREE/8)
-	var count uint
-	var i uint
-	for count = 0; count < degree/8; count += i {
-		/*
-						i = read(cprng, buf+count, degree/8-count)
-						if i < 0 {
-							cclose(cprng)
-			        log.Fatal("couldn't read from " RANDOM_SOURCE)
-						}
-		*/
-	}
-	//mpz_import(x, degree/8, 1, 1, 0, 0, buf)
+	buf := make([]byte, degree/8)
+	/*
+		var count uint
+		var i uint
+		for count = 0; count < degree/8; count += i {
+							i = read(cprng, buf+count, degree/8-count)
+							if i < 0 {
+								cclose(cprng)
+				        log.Fatal("couldn't read from " RANDOM_SOURCE)
+							}
+		}
+	*/
+	x.SetBytes(buf) //mpz_import(x, degree/8, 1, 1, 0, 0, buf)
 }
 
 // a 64 bit pseudo random permutation (based on the XTEA cipher)
@@ -308,7 +302,7 @@ const (
 	DECODE
 )
 
-func encode_mpz(x gmp.Int, encdecmode encdec) {
+func encode_mpz(x *gmp.Int, encdecmode encdec) {
 	v := make([]uint8, (MAXDEGREE+8)/16*2)
 	//var t uint32
 	//var i int
@@ -338,8 +332,8 @@ func encode_mpz(x gmp.Int, encdecmode encdec) {
 
 // evaluate polynomials efficiently
 
-func horner(n int, y, x gmp.Int, coeff []gmp.Int) {
-	y.Set(&x) //mpz_set(y, x)
+func horner(n int, y, x *gmp.Int, coeff []*gmp.Int) {
+	y.Set(x) //mpz_set(y, x)
 	for i := n - 1; i != 0; i-- {
 		field_add(y, y, coeff[i])
 		field_mult(y, y, x)
@@ -404,7 +398,10 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 
 func split(opt_threshold, opt_number, opt_security int) {
 	var fmt_len uint = 1
-	coeff := make([]gmp.Int, opt_threshold)
+	coeff := make([]*gmp.Int, opt_threshold)
+	for i := range coeff {
+		coeff[i] = new(gmp.Int)
+	}
 	for i := opt_number; i >= 10; i /= 10 {
 		fmt_len++
 	}
@@ -472,11 +469,9 @@ func split(opt_threshold, opt_number, opt_security int) {
 	cprng_deinit()
 
 	var x, y gmp.Int
-	_ = x
-	_ = y
 	for i := 0; i < opt_number; i++ {
 		x.SetUint64(uint64(i + 1)) // mpz_set_ui(x, i+1)
-		horner(opt_threshold, y, x, coeff)
+		horner(opt_threshold, &y, &x, coeff)
 		if opt_token != "" {
 			fmt.Printf("%s-", opt_token)
 		}
@@ -555,7 +550,7 @@ func combine(opt_threshold int) {
 			//field_mult(A[j][i], A[j+1][i], x)
 		}
 		//mpz_init(y[i])
-		//field_import(y[i], string(b), 1)
+		//field_import(&y[i], string(b), 1)
 		//field_mult(x, x, A[0][i])
 		//field_add(y[i], y[i], x)
 	}
@@ -568,7 +563,7 @@ func combine(opt_threshold int) {
 
 	if opt_diffusion {
 		if degree >= 64 {
-			//encode_mpz(y[opt_threshold-1], DECODE)
+			//encode_mpz(&y[opt_threshold-1], DECODE)
 		} else {
 			warning("security level too small for the diffusion layer")
 		}

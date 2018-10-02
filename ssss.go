@@ -104,10 +104,6 @@ func field_init(deg int) {
 	degree = uint(deg)
 }
 
-func field_deinit() {
-	//mpz_clear(poly)
-}
-
 // I/O routines for GF(2^deg) field elements
 
 func field_import(x gmp.Int, s string, hexmode bool) {
@@ -118,11 +114,10 @@ func field_import(x gmp.Int, s string, hexmode bool) {
 		if len(s) < int(degree)/4 {
 			warning("input string too short, adding null padding on the left")
 		}
-		/*
-						if mpz_set_str(x, s, 16) || mpz_cmp_ui(x, 0) < 0 {
-			        log.Fatal("invalid syntax")
-						}
-		*/
+		_, ok := x.SetString(s, 16)
+		if !ok { // || mpz_cmp_ui(x, 0) < 0
+			log.Fatal("invalid syntax")
+		}
 	} else {
 		var warn bool
 		if len(s) > int(degree)/8 {
@@ -134,16 +129,15 @@ func field_import(x gmp.Int, s string, hexmode bool) {
 		if warn {
 			warning("binary data detected, use -x mode instead")
 		}
-		//mpz_import(x, len(s), 1, 1, 0, 0, s)
+		x.SetBytes([]byte(s)) // mpz_import(x, len(s), 1, 1, 0, 0, s)
 	}
 }
 
-func field_print(stream int /* *FILE*/, x gmp.Int, hexmode bool) {
-	//var i int
+func field_print(x gmp.Int, hexmode bool) {
 	if hexmode {
 		/*
-			for i = degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
-				//fprintf(stream, "0")
+			for i := degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
+				fmt.Print("0")
 			}
 		*/
 		//mpz_out_str(stream, 16, x)
@@ -158,9 +152,13 @@ func field_print(stream int /* *FILE*/, x gmp.Int, hexmode bool) {
 		for i = 0; i < t; i++ {
 			printable = (buf[i] >= 32) && (buf[i] < 127)
 			warn = warn || !printable
-			//fprintf(stream, "%c", printable ? buf[i] : '.')
+			if printable {
+				fmt.Printf("%c", buf[i])
+			} else {
+				fmt.Printf(".")
+			}
 		}
-		//fprintf(stream, "\n")
+		fmt.Println()
 		if warn {
 			warning("binary data detected, use -x mode instead")
 		}
@@ -341,7 +339,7 @@ func encode_mpz(x gmp.Int, encdecmode encdec) {
 // evaluate polynomials efficiently
 
 func horner(n int, y, x gmp.Int, coeff []gmp.Int) {
-	//mpz_set(y, x)
+	y.Set(&x) //mpz_set(y, x)
 	for i := n - 1; i != 0; i-- {
 		field_add(y, y, coeff[i])
 		field_mult(y, y, x)
@@ -407,7 +405,6 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 func split(opt_threshold, opt_number, opt_security int) {
 	var fmt_len uint = 1
 	coeff := make([]gmp.Int, opt_threshold)
-	var i int
 	for i := opt_number; i >= 10; i /= 10 {
 		fmt_len++
 	}
@@ -432,9 +429,8 @@ func split(opt_threshold, opt_number, opt_security int) {
 			fmt.Printf("at most %d ASCII characters: ", deg/8)
 		}
 	}
-	// TODO ssss-0.5/ssss.c
-	// TODO echo off/on
 
+	// TODO echo off/on
 	//buf := make([]byte, 0)
 	scanner := bufio.NewScanner(os.Stdin)
 	if !scanner.Scan() {
@@ -459,7 +455,6 @@ func split(opt_threshold, opt_number, opt_security int) {
 
 	field_init(opt_security)
 
-	// mpz_init(coeff[0])
 	field_import(coeff[0], string(buf), opt_hex)
 
 	if opt_diffusion {
@@ -472,35 +467,31 @@ func split(opt_threshold, opt_number, opt_security int) {
 
 	cprng_init()
 	for i := 1; i < opt_threshold; i++ {
-		// mpz_init(coeff[i])
 		cprng_read(coeff[i])
 	}
 	cprng_deinit()
 
-	var x, y gmp.Int // mpz_init(x) mpz_init(y)
+	var x, y gmp.Int
 	_ = x
 	_ = y
 	for i := 0; i < opt_number; i++ {
-		// mpz_set_ui(x, i+1)
-		// horner(opt_threshold, y, x, coeff.(*gmp.Int))
+		x.SetUint64(uint64(i + 1)) // mpz_set_ui(x, i+1)
+		horner(opt_threshold, y, x, coeff)
 		if opt_token != "" {
 			fmt.Printf("%s-", opt_token)
 		}
 		fmt.Printf("%0*d-", fmt_len, i+1)
-		// field_print(stdout, y, 1)
+		field_print(y, true)
 	}
-	// mpz_clear(x) mpz_clear(y)
-
-	for i = 0; i < opt_threshold; i++ {
-		// mpz_clear(coeff[i])
-	}
-	field_deinit()
 }
 
 // Prompt for shares, calculate the secret
 
-func combine(opt_threshold, opt_number, opt_security int) {
-	//gmp.Int A[opt_threshold][opt_threshold], y[opt_threshold], x
+func combine(opt_threshold int) {
+	//A := make([]gmp.Int, opt_threshold) // A[opt_threshold][opt_threshold]
+	y := make([]gmp.Int, opt_threshold)
+	var x gmp.Int
+	_ = x
 	//char buf[MAXLINELEN]
 	//char *a, *b
 	var b []byte
@@ -586,7 +577,7 @@ func combine(opt_threshold, opt_number, opt_security int) {
 	if !opt_quiet {
 		//fprintf(stderr, "Resulting secret: ")
 	}
-	//field_print(stderr, y[opt_threshold-1], opt_hex)
+	field_print(y[opt_threshold-1], opt_hex)
 
 	for i := 0; i < opt_threshold; i++ {
 		for j := 0; j < opt_threshold; j++ {
@@ -594,7 +585,7 @@ func combine(opt_threshold, opt_number, opt_security int) {
 		}
 		//mpz_clear(y[i])
 	}
-	field_deinit()
+	//mpz_clear(poly)
 }
 
 func main() {
@@ -667,6 +658,6 @@ func main() {
 		if *opt_threshold < 2 {
 			log.Fatal("invalid parameters: invalid threshold value")
 		}
-		combine(*opt_threshold, *opt_number, *opt_security)
+		combine(*opt_threshold)
 	}
 }

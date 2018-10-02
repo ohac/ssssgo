@@ -61,8 +61,6 @@ var opt_quiet bool
 var opt_QUIET bool
 var opt_hex bool
 var opt_diffusion bool = true
-var opt_threshold int = -1
-var opt_number int = -1
 
 var opt_token string
 
@@ -406,7 +404,7 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 
 // Prompt for a secret, generate shares for it
 
-func split(opt_security int) {
+func split(opt_threshold, opt_number, opt_security int) {
 	var fmt_len uint = 1
 	coeff := make([]gmp.Int, opt_threshold)
 	var i int
@@ -501,7 +499,7 @@ func split(opt_security int) {
 
 // Prompt for shares, calculate the secret
 
-func combine() {
+func combine(opt_threshold, opt_number, opt_security int) {
 	//gmp.Int A[opt_threshold][opt_threshold], y[opt_threshold], x
 	//char buf[MAXLINELEN]
 	//char *a, *b
@@ -655,7 +653,7 @@ func main() {
 		if *opt_token != "" && len(*opt_token) > MAXTOKENLEN {
 			log.Fatal("invalid parameters: token too long")
 		}
-		split(*opt_security)
+		split(*opt_threshold, *opt_number, *opt_security)
 	} else {
 		if *opt_help || *opt_showversion {
 			fmt.Println("Combine shares using Shamir's Secret Sharing Scheme.\n" +
@@ -669,6 +667,6 @@ func main() {
 		if *opt_threshold < 2 {
 			log.Fatal("invalid parameters: invalid threshold value")
 		}
-		combine()
+		combine(*opt_threshold, *opt_number, *opt_security)
 	}
 }

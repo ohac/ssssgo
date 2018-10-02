@@ -28,6 +28,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"github.com/ncw/gmp"
@@ -120,9 +121,9 @@ func field_import(x gmp.Int, s string, hexmode bool) {
 			warning("input string too short, adding null padding on the left")
 		}
 		/*
-					if mpz_set_str(x, s, 16) || mpz_cmp_ui(x, 0) < 0 {
-		        log.Fatal("invalid syntax")
-					}
+						if mpz_set_str(x, s, 16) || mpz_cmp_ui(x, 0) < 0 {
+			        log.Fatal("invalid syntax")
+						}
 		*/
 	} else {
 		var warn bool
@@ -254,11 +255,11 @@ func cprng_read(x gmp.Int) {
 	var i uint
 	for count = 0; count < degree/8; count += i {
 		/*
-					i = read(cprng, buf+count, degree/8-count)
-					if i < 0 {
-						cclose(cprng)
-		        log.Fatal("couldn't read from " RANDOM_SOURCE)
-					}
+						i = read(cprng, buf+count, degree/8-count)
+						if i < 0 {
+							cclose(cprng)
+			        log.Fatal("couldn't read from " RANDOM_SOURCE)
+						}
 		*/
 	}
 	//mpz_import(x, degree/8, 1, 1, 0, 0, buf)
@@ -341,7 +342,7 @@ func encode_mpz(x gmp.Int, encdecmode encdec) {
 
 // evaluate polynomials efficiently
 
-func horner(n int, y gmp.Int, x gmp.Int, coeff []gmp.Int) {
+func horner(n int, y, x gmp.Int, coeff []gmp.Int) {
 	//mpz_set(y, x)
 	for i := n - 1; i != 0; i-- {
 		field_add(y, y, coeff[i])
@@ -407,10 +408,7 @@ func restore_secret(n int /*, gmp.Int (*A)[n]*/, b []gmp.Int) int {
 
 func split(opt_security int) {
 	var fmt_len uint = 1
-	//var x, y gmp.Int
 	coeff := make([]gmp.Int, opt_threshold)
-	buf := make([]byte, MAXLINELEN)
-	//var deg int
 	var i int
 	for i := opt_number; i >= 10; i /= 10 {
 		fmt_len++
@@ -425,30 +423,45 @@ func split(opt_security int) {
 			fmt.Print("dynamic")
 		}
 		fmt.Println(" security level.")
-		//deg = opt_security ? opt_security : MAXDEGREE
+		deg := opt_security
+		if opt_security == 0 {
+			opt_security = MAXDEGREE
+		}
 		fmt.Print("Enter the secret, ")
 		if opt_hex {
-			//fprintf(stderr, "as most %d hex digits: ", deg/4)
+			fmt.Printf("as most %d hex digits: ", deg/4)
 		} else {
-			//fprintf(stderr, "at most %d ASCII characters: ", deg/8)
+			fmt.Printf("at most %d ASCII characters: ", deg/8)
 		}
 	}
+	// TODO ssss-0.5/ssss.c
 	// TODO echo off/on
-	//buf[strcspn(buf, "\r\n")] = '\0'
+
+	//buf := make([]byte, 0)
+	scanner := bufio.NewScanner(os.Stdin)
+	if !scanner.Scan() {
+		log.Fatal("no input")
+	}
+	buf := []byte(scanner.Text())
+	// TODO chomp linefeed
 
 	if opt_security == 0 {
-		//opt_security = opt_hex ? 4 * ((len(buf) + 1) & ~1): 8 * len(buf)
+		if opt_hex {
+			opt_security = 8 * ((len(buf) + 1) >> 1)
+		} else {
+			opt_security = 8 * len(buf)
+		}
 		if !field_size_valid(opt_security) {
 			log.Fatal("security level invalid (secret too long?)")
 		}
 		if !opt_quiet {
-			//fprintf(stderr, "Using a %d bit security level.\n", opt_security)
+			fmt.Printf("Using a %d bit security level.\n", opt_security)
 		}
 	}
 
 	field_init(opt_security)
 
-	//mpz_init(coeff[0])
+	// mpz_init(coeff[0])
 	field_import(coeff[0], string(buf), opt_hex)
 
 	if opt_diffusion {
@@ -461,27 +474,27 @@ func split(opt_security int) {
 
 	cprng_init()
 	for i := 1; i < opt_threshold; i++ {
-		//mpz_init(coeff[i])
+		// mpz_init(coeff[i])
 		cprng_read(coeff[i])
 	}
 	cprng_deinit()
 
-	//mpz_init(x)
-	//mpz_init(y)
+	var x, y gmp.Int // mpz_init(x) mpz_init(y)
+	_ = x
+	_ = y
 	for i := 0; i < opt_number; i++ {
-		//mpz_set_ui(x, i+1)
-		//horner(opt_threshold, y, x, coeff.(*gmp.Int))
+		// mpz_set_ui(x, i+1)
+		// horner(opt_threshold, y, x, coeff.(*gmp.Int))
 		if opt_token != "" {
 			fmt.Printf("%s-", opt_token)
 		}
 		fmt.Printf("%0*d-", fmt_len, i+1)
-		//field_print(stdout, y, 1)
+		// field_print(stdout, y, 1)
 	}
-	//mpz_clear(x)
-	//mpz_clear(y)
+	// mpz_clear(x) mpz_clear(y)
 
 	for i = 0; i < opt_threshold; i++ {
-		//mpz_clear(coeff[i])
+		// mpz_clear(coeff[i])
 	}
 	field_deinit()
 }
@@ -506,16 +519,16 @@ func combine() {
 		}
 
 		/*
-					if !fgets(buf, sizeof(buf), stdin) {
-		        log.Fatal("I/O error while reading shares")
-					}
+						if !fgets(buf, sizeof(buf), stdin) {
+			        log.Fatal("I/O error while reading shares")
+						}
 		*/
 		//buf[strcspn(buf, "\r\n")] = '\0'
 		/*
-					a = strchr(buf, '-')
-					if !a {
-		        log.Fatal("invalid syntax")
-					}
+						a = strchr(buf, '-')
+						if !a {
+			        log.Fatal("invalid syntax")
+						}
 		*/
 		//*a++ = 0
 		/*

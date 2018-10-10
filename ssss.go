@@ -34,6 +34,7 @@ import (
 	//big "github.com/ncw/gmp"
 	"log"
 	"math/big"
+	"math/rand"
 	"os"
 )
 
@@ -69,8 +70,6 @@ var degree uint
 
 var poly big.Int
 
-var cprng int
-
 //struct termios echo_orig, echo_off
 
 // define mpz_lshift(A, B, l) mpz_mul_2exp(A, B, l)
@@ -95,12 +94,19 @@ func field_size_valid(deg int) bool {
 // irreducible polynomial of degree 'deg'
 
 func field_init(deg int) {
-	//assert(field_size_valid(deg))
+	if !field_size_valid(deg) {
+		log.Fatal("field_init")
+	}
 	//mpz_init_set_ui(poly, 0)
+	poly.SetBit(&poly, deg, 1)
 	//mpz_setbit(poly, deg)
+	poly.SetBit(&poly, int(irred_coeff[3*(deg/8-1)+0]), 1)
+	poly.SetBit(&poly, int(irred_coeff[3*(deg/8-1)+1]), 1)
+	poly.SetBit(&poly, int(irred_coeff[3*(deg/8-1)+2]), 1)
 	//mpz_setbit(poly, irred_coeff[3 * (deg / 8 - 1) + 0])
 	//mpz_setbit(poly, irred_coeff[3 * (deg / 8 - 1) + 1])
 	//mpz_setbit(poly, irred_coeff[3 * (deg / 8 - 1) + 2])
+	poly.SetBit(&poly, 0, 1)
 	//mpz_setbit(poly, 0)
 	degree = uint(deg)
 }
@@ -135,14 +141,17 @@ func field_import(x *big.Int, s string, hexmode bool) {
 }
 
 func field_print(x big.Int, hexmode bool) {
-	if false /*hexmode*/ {
+	if hexmode {
 		/*
-			for i := degree/4 - mpz_sizeinbase(x, 16); i > 0; i-- {
-				fmt.Print("0")
-			}
+		    // i := degree/4 - mpz_sizeinbase(x, 16)
+				for i := int(degree/4) - x.BitLen()*8; i > 0; i-- {
+					fmt.Print("0")
+		    }
 		*/
-		//mpz_out_str(stream, 16, x)
-		//fprintf(stream, "\n")
+		for _, b := range x.Bytes() {
+			fmt.Printf("%02x", b)
+		}
+		fmt.Println()
 	} else {
 		var printable, warn bool
 		buf := x.Bytes()
@@ -181,7 +190,7 @@ func field_mult(z, x, y *big.Int) {
 		z.SetUint64(0)
 	}
 	for i = 1; i < degree; i++ {
-		//mpz_lshift(b, b, 1)
+		b.Lsh(&b, 1)
 		if b.Bit(int(degree)) != 0 {
 			b.Xor(&b, &poly)
 		}
@@ -223,36 +232,17 @@ func field_invert(z, x big.Int) {
 // routines for the random number generator
 
 func cprng_init() {
-	/*
-		cprng = open(RANDOM_SOURCE, O_RDONLY)
-		if cprng < 0 {
-			log.Fatal("couldn't open " + RANDOM_SOURCE)
-		}
-	*/
 }
 
 func cprng_deinit() {
-	/*
-		if cclose(cprng) < 0 {
-			log.Fatal("couldn't close " + RANDOM_SOURCE)
-		}
-	*/
 }
 
 func cprng_read(x *big.Int) {
 	//buf := make([]byte, MAXDEGREE/8)
 	buf := make([]byte, degree/8)
-	/*
-		var count uint
-		var i uint
-		for count = 0; count < degree/8; count += i {
-							i = read(cprng, buf+count, degree/8-count)
-							if i < 0 {
-								cclose(cprng)
-				        log.Fatal("couldn't read from " RANDOM_SOURCE)
-							}
-		}
-	*/
+	for i := range buf {
+		buf[i] = byte(rand.Uint32()) // TODO secure
+	}
 	x.SetBytes(buf) //mpz_import(x, degree/8, 1, 1, 0, 0, buf)
 }
 
@@ -418,7 +408,7 @@ func split(opt_threshold, opt_number, opt_security int) {
 		fmt.Println(" security level.")
 		deg := opt_security
 		if opt_security == 0 {
-			opt_security = MAXDEGREE
+			deg = MAXDEGREE
 		}
 		fmt.Print("Enter the secret, ")
 		if opt_hex {
@@ -597,8 +587,8 @@ func main() {
 	opt_hex := flag.Bool("x", false, "hex")
 
 	opt_security := flag.Int("s", 0, "security")
-	opt_threshold := flag.Int("t", -1, "threshold")
-	opt_number := flag.Int("n", -1, "number")
+	opt_threshold := flag.Int("t", 2, "threshold")
+	opt_number := flag.Int("n", 3, "number")
 	opt_token := flag.String("w", "", "token")
 
 	_ = opt_diffusion
@@ -612,13 +602,20 @@ func main() {
 	_ = opt_quiet
 
 	args := flag.Args()
+	if len(args) == 0 {
+		fmt.Println("ssss [options] [split/combine]\n" +
+			"help: ssss --help\n" +
+			"help: ssss -h split\n" +
+			"help: ssss -h combine")
+		os.Exit(0)
+	}
 	name := args[0]
 
 	if name == "split" {
 		if *opt_help || *opt_showversion {
 			fmt.Println("Split secrets using Shamir's Secret Sharing Scheme.\n" +
 				"\n" +
-				"ssss -t threshold -n shares [-w token] [-s level]" +
+				"ssss [-t threshold] [-n shares] [-w token] [-s level]" +
 				" [-x] [-q] [-Q] [-D] [-v] split")
 			if *opt_showversion {
 				fmt.Println("\nVersion: " + VERSION)

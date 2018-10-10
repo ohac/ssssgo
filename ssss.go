@@ -36,6 +36,8 @@ import (
 	"math/big"
 	"math/rand"
 	"os"
+	"strconv"
+	"strings"
 )
 
 var VERSION string = "0.5"
@@ -193,7 +195,6 @@ func field_invert(z, x *big.Int) {
 	v = poly
 	g.SetUint64(0)
 	z.SetUint64(1)
-	_ = v
 	one.SetUint64(1)
 	for u.Cmp(&one) != 0 {
 		// TODO
@@ -204,18 +205,18 @@ func field_invert(z, x *big.Int) {
 		z.Xor(z, &h)
 	}
 	/*
-					for mpz_cmp_ui(u, 1) {
-	          i := mpz_sizeinbits(u) - mpz_sizeinbits(v)
-						if i < 0 {
-							//mpz_swap(u, v)
-							//mpz_swap(z, g)
-							i = -i
+						for mpz_cmp_ui(u, 1) {
+		          i := mpz_sizeinbits(u) - mpz_sizeinbits(v)
+							if i < 0 {
+								//mpz_swap(u, v)
+								//mpz_swap(z, g)
+								i = -i
+							}
+							//mpz_lshift(h, v, i)
+				      u.Xor(&u, &h)
+							//mpz_lshift(h, g, i)
+				      z.Xor(&z, &h)
 						}
-						//mpz_lshift(h, v, i)
-			      u.Xor(&u, &h)
-						//mpz_lshift(h, g, i)
-			      z.Xor(&z, &h)
-					}
 	*/
 }
 
@@ -252,11 +253,9 @@ func decipher_block(v []uint32) {
 func encode_slice(data []byte, idx, leng int, process_block func([]uint32)) {
 	v := make([]uint32, 2)
 	for i := 0; i < 2; i++ {
-		/*
-			v[i] = data[(idx+4*i)%leng]<<24 |
-				data[(idx+4*i+1)%leng]<<16 |
-				data[(idx+4*i+2)%leng]<<8 | data[(idx+4*i+3)%leng]
-		*/
+		v[i] = uint32(data[(idx+4*i)%leng])<<24 |
+			uint32(data[(idx+4*i+1)%leng])<<16 |
+			uint32(data[(idx+4*i+2)%leng])<<8 | uint32(data[(idx+4*i+3)%leng])
 	}
 	process_block(v)
 	for i := 0; i < 2; i++ {
@@ -277,8 +276,6 @@ const (
 func encode_mpz(x *big.Int, encdecmode encdec) {
 	v := make([]uint8, (MAXDEGREE+8)/16*2)
 	//var t uint32
-	//var i int
-	//memset(v, 0, (degree+8)/16*2)
 	//mpz_export(v, &t, -1, 2, 1, 0, x)
 	if degree%16 == 8 {
 		v[degree/8-1] = v[degree/8]
@@ -315,53 +312,51 @@ func horner(n int, y, x *big.Int, coeff []*big.Int) {
 
 // calculate the secret from a set of shares solving a linear equation system
 
-/*
-#define MPZ_SWAP(A, B) \
-  do { mpz_set(h, A); mpz_set(A, B); mpz_set(B, h); } while(0)
-*/
+func MPZ_SWAP(A, B, h *big.Int) {
+	*h = *A
+	*A = *B
+	*B = *h
+}
 
-func restore_secret(n int /*, big.Int (*A)[n]*/, b []big.Int) int {
-	//big.Int (*AA)[n] = (big.Int (*)[n])A
-	//var found int
+func restore_secret(n int, A [][]big.Int, b []big.Int) bool {
+	AA := A // TODO big.Int (*AA)[n] = (big.Int (*)[n])A
 	var i, j, k int
-	//var h big.Int
+	var h big.Int
+	var zero big.Int
+	zero.SetUint64(0)
 	for i = 0; i < n; i++ {
-		//if !mpz_cmp_ui(AA[i][i], 0) {
-		found := false
-		for j = i + 1; j < n; j++ {
-			/*
-				if mpz_cmp_ui(AA[i][j], 0) {
-					found = 1
+		if AA[i][i].Cmp(&zero) == 0 {
+			found := false
+			for j = i + 1; j < n; j++ {
+				if AA[i][j].Cmp(&zero) != 0 {
+					found = true
 					break
 				}
-			*/
+			}
+			if !found {
+				return true
+			}
+			for k = i; k < n; k++ {
+				MPZ_SWAP(&AA[k][i], &AA[k][j], &h)
+			}
+			MPZ_SWAP(&b[i], &b[j], &h)
 		}
-		if !found {
-			return -1
-		}
-		for k = i; k < n; k++ {
-			//MPZ_SWAP(AA[k][i], AA[k][j])
-		}
-		//MPZ_SWAP(b[i], b[j])
-		//}
 		for j = i + 1; j < n; j++ {
-			/*
-				if mpz_cmp_ui(AA[i][j], 0) {
-					for k = i + 1; k < n; k++ {
-						field_mult(h, AA[k][i], AA[i][j])
-						field_mult(AA[k][j], AA[k][j], AA[i][i])
-						field_add(AA[k][j], AA[k][j], h)
-					}
-					field_mult(h, b[i], AA[i][j])
-					field_mult(b[j], b[j], AA[i][i])
-					field_add(b[j], b[j], h)
+			if AA[i][j].Cmp(&zero) != 0 {
+				for k = i + 1; k < n; k++ {
+					field_mult(&h, &AA[k][i], &AA[i][j])
+					field_mult(&AA[k][j], &AA[k][j], &AA[i][i])
+					field_add(&AA[k][j], &AA[k][j], &h)
 				}
-			*/
+				field_mult(&h, &b[i], &AA[i][j])
+				field_mult(&b[j], &b[j], &AA[i][i])
+				field_add(&b[j], &b[j], &h)
+			}
 		}
 	}
-	//field_invert(&h, &AA[n-1][n-1])
-	//field_mult(b[n-1], b[n-1], h)
-	return 0
+	field_invert(&h, &AA[n-1][n-1])
+	field_mult(&b[n-1], &b[n-1], &h)
+	return false
 }
 
 // Prompt for a secret, generate shares for it
@@ -449,12 +444,14 @@ func split(opt_threshold, opt_number, opt_security int) {
 // Prompt for shares, calculate the secret
 
 func combine(opt_threshold int) {
-	//A := make([]big.Int, opt_threshold) // A[opt_threshold][opt_threshold]
+	A := make([][]big.Int, opt_threshold)
+	for i := range A {
+		A[i] = make([]big.Int, opt_threshold)
+	}
 	y := make([]big.Int, opt_threshold)
 	var x big.Int
-	_ = x
-	var b []byte
 	var s uint
+	var a, b string
 
 	if !opt_quiet {
 		fmt.Printf("Enter %d shares separated by newlines:\n", opt_threshold)
@@ -467,25 +464,18 @@ func combine(opt_threshold int) {
 		if !scanner.Scan() {
 			log.Fatal("I/O error while reading shares")
 		}
-		buf := []byte(scanner.Text())
-		_ = buf
-
-		/*
-						a = strchr(buf, '-')
-						if !a {
-			        log.Fatal("invalid syntax")
-						}
-		*/
-		//*a++ = 0
-		/*
-			b = strchr(a, '-')
-			if b {
-				//*b++ = 0
-			} else {
-				b = a
-				a = buf
-			}
-		*/
+		txt := scanner.Text()
+		ss := strings.Split(txt, "-")
+		switch len(ss) {
+		case 2:
+			a = ss[0]
+			b = ss[1]
+		case 3:
+			a = ss[1]
+			b = ss[2]
+		default:
+			log.Fatal("invalid syntax")
+		}
 
 		if s == 0 {
 			s = uint(4 * len(b))
@@ -499,30 +489,27 @@ func combine(opt_threshold int) {
 			}
 		}
 
-		//j := atoi(a)
-		/*
-			if j == 0 {
+		j, err := strconv.Atoi(a)
+		if j == 0 || err != nil {
 			log.Fatal("invalid share")
-			}
-		*/
-		//mpz_set_ui(x, j)
-		//mpz_init_set_ui(A[opt_threshold-1][i], 1)
+		}
+
+		x.SetUint64(uint64(j))
+		A[opt_threshold-1][i].SetUint64(1)
 		for j := opt_threshold - 2; j >= 0; j-- {
-			//field_mult(A[j][i], A[j+1][i], x)
+			field_mult(&A[j][i], &A[j+1][i], &x)
 		}
-		//field_import(&y[i], string(b), 1)
-		//field_mult(x, x, A[0][i])
-		//field_add(y[i], y[i], x)
+		field_import(&y[i], b, true)
+		field_mult(&x, &x, &A[0][i])
+		field_add(&y[i], &y[i], &x)
 	}
-	/*
-		if restore_secret(opt_threshold, A, y) != 0 {
-			log.Fatal("shares inconsistent. Perhaps a single share was used twice")
-		}
-	*/
+	if restore_secret(opt_threshold, A, y) {
+		log.Fatal("shares inconsistent. Perhaps a single share was used twice")
+	}
 
 	if opt_diffusion {
 		if degree >= 64 {
-			//encode_mpz(&y[opt_threshold-1], DECODE)
+			encode_mpz(&y[opt_threshold-1], DECODE)
 		} else {
 			warning("security level too small for the diffusion layer")
 		}

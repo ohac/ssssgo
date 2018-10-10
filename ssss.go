@@ -70,8 +70,6 @@ var degree uint
 
 var poly big.Int
 
-//struct termios echo_orig, echo_off
-
 // define mpz_lshift(A, B, l) mpz_mul_2exp(A, B, l)
 // define mpz_sizeinbits(A) (mpz_cmp_ui(A, 0) ? mpz_sizeinbase(A, 2) : 0)
 
@@ -97,17 +95,11 @@ func field_init(deg int) {
 	if !field_size_valid(deg) {
 		log.Fatal("field_init")
 	}
-	//mpz_init_set_ui(poly, 0)
 	poly.SetBit(&poly, deg, 1)
-	//mpz_setbit(poly, deg)
 	poly.SetBit(&poly, int(irred_coeff[3*(deg/8-1)+0]), 1)
 	poly.SetBit(&poly, int(irred_coeff[3*(deg/8-1)+1]), 1)
 	poly.SetBit(&poly, int(irred_coeff[3*(deg/8-1)+2]), 1)
-	//mpz_setbit(poly, irred_coeff[3 * (deg / 8 - 1) + 0])
-	//mpz_setbit(poly, irred_coeff[3 * (deg / 8 - 1) + 1])
-	//mpz_setbit(poly, irred_coeff[3 * (deg / 8 - 1) + 2])
 	poly.SetBit(&poly, 0, 1)
-	//mpz_setbit(poly, 0)
 	degree = uint(deg)
 }
 
@@ -122,7 +114,7 @@ func field_import(x *big.Int, s string, hexmode bool) {
 			warning("input string too short, adding null padding on the left")
 		}
 		_, ok := x.SetString(s, 16)
-		if !ok { // || mpz_cmp_ui(x, 0) < 0
+		if !ok {
 			log.Fatal("invalid syntax")
 		}
 	} else {
@@ -136,18 +128,12 @@ func field_import(x *big.Int, s string, hexmode bool) {
 		if warn {
 			warning("binary data detected, use -x mode instead")
 		}
-		x.SetBytes([]byte(s)) // mpz_import(x, len(s), 1, 1, 0, 0, s)
+		x.SetBytes([]byte(s))
 	}
 }
 
 func field_print(x big.Int, hexmode bool) {
 	if hexmode {
-		/*
-		    // i := degree/4 - mpz_sizeinbase(x, 16)
-				for i := int(degree/4) - x.BitLen()*8; i > 0; i-- {
-					fmt.Print("0")
-		    }
-		*/
 		for _, b := range x.Bytes() {
 			fmt.Printf("%02x", b)
 		}
@@ -200,50 +186,45 @@ func field_mult(z, x, y *big.Int) {
 	}
 }
 
-func field_invert(z, x big.Int) {
-	//var u, v, g, h gmp.Int
-	//var i int
+func field_invert(z, x *big.Int) {
+	var u, v, g, h, one big.Int
 	//assert(mpz_cmp_ui(x, 0))
-	//mpz_init_set(u, x)
-	//mpz_init_set(v, poly)
-	//mpz_init_set_ui(g, 0)
-	//mpz_set_ui(z, 1)
-	//mpz_init(h)
+	u = *x
+	v = poly
+	g.SetUint64(0)
+	z.SetUint64(1)
+	_ = v
+	one.SetUint64(1)
+	for u.Cmp(&one) != 0 {
+		// TODO
+		i := 0 // TODO
+		h.Lsh(&v, uint(i))
+		u.Xor(&u, &h)
+		h.Lsh(&g, uint(i))
+		z.Xor(z, &h)
+	}
 	/*
-				for mpz_cmp_ui(u, 1) {
-					i = mpz_sizeinbits(u) - mpz_sizeinbits(v)
-					if i < 0 {
-						//mpz_swap(u, v)
-						//mpz_swap(z, g)
-						i = -i
+					for mpz_cmp_ui(u, 1) {
+	          i := mpz_sizeinbits(u) - mpz_sizeinbits(v)
+						if i < 0 {
+							//mpz_swap(u, v)
+							//mpz_swap(z, g)
+							i = -i
+						}
+						//mpz_lshift(h, v, i)
+			      u.Xor(&u, &h)
+						//mpz_lshift(h, g, i)
+			      z.Xor(&z, &h)
 					}
-					//mpz_lshift(h, v, i)
-		      u.Xor(&u, &h)
-					//mpz_lshift(h, g, i)
-		      z.Xor(&z, &h)
-				}
 	*/
-	//mpz_clear(u)
-	//mpz_clear(v)
-	//mpz_clear(g)
-	//mpz_clear(h)
-}
-
-// routines for the random number generator
-
-func cprng_init() {
-}
-
-func cprng_deinit() {
 }
 
 func cprng_read(x *big.Int) {
-	//buf := make([]byte, MAXDEGREE/8)
 	buf := make([]byte, degree/8)
 	for i := range buf {
 		buf[i] = byte(rand.Uint32()) // TODO secure
 	}
-	x.SetBytes(buf) //mpz_import(x, degree/8, 1, 1, 0, 0, buf)
+	x.SetBytes(buf)
 }
 
 // a 64 bit pseudo random permutation (based on the XTEA cipher)
@@ -344,7 +325,6 @@ func restore_secret(n int /*, big.Int (*A)[n]*/, b []big.Int) int {
 	//var found int
 	var i, j, k int
 	//var h big.Int
-	//mpz_init(h)
 	for i = 0; i < n; i++ {
 		//if !mpz_cmp_ui(AA[i][i], 0) {
 		found := false
@@ -379,9 +359,8 @@ func restore_secret(n int /*, big.Int (*A)[n]*/, b []big.Int) int {
 			*/
 		}
 	}
-	//field_invert(h, AA[n-1][n-1])
+	//field_invert(&h, &AA[n-1][n-1])
 	//field_mult(b[n-1], b[n-1], h)
-	//mpz_clear(h)
 	return 0
 }
 
@@ -419,13 +398,11 @@ func split(opt_threshold, opt_number, opt_security int) {
 	}
 
 	// TODO echo off/on
-	//buf := make([]byte, 0)
 	scanner := bufio.NewScanner(os.Stdin)
 	if !scanner.Scan() {
 		log.Fatal("no input")
 	}
 	buf := []byte(scanner.Text())
-	// TODO chomp linefeed
 
 	if opt_security == 0 {
 		if opt_hex {
@@ -453,11 +430,9 @@ func split(opt_threshold, opt_number, opt_security int) {
 		}
 	}
 
-	cprng_init()
 	for i := 1; i < opt_threshold; i++ {
 		cprng_read(coeff[i])
 	}
-	cprng_deinit()
 
 	var x, y big.Int
 	for i := 0; i < opt_number; i++ {
@@ -478,27 +453,23 @@ func combine(opt_threshold int) {
 	y := make([]big.Int, opt_threshold)
 	var x big.Int
 	_ = x
-	//char buf[MAXLINELEN]
-	//char *a, *b
 	var b []byte
-	//int i, j
 	var s uint
 
-	//mpz_init(x)
 	if !opt_quiet {
-		fmt.Println("Enter %d shares separated by newlines:\n", opt_threshold)
+		fmt.Printf("Enter %d shares separated by newlines:\n", opt_threshold)
 	}
 	for i := 0; i < opt_threshold; i++ {
 		if !opt_quiet {
-			fmt.Println("Share [%d/%d]: ", i+1, opt_threshold)
+			fmt.Printf("Share [%d/%d]: ", i+1, opt_threshold)
 		}
+		scanner := bufio.NewScanner(os.Stdin)
+		if !scanner.Scan() {
+			log.Fatal("I/O error while reading shares")
+		}
+		buf := []byte(scanner.Text())
+		_ = buf
 
-		/*
-						if !fgets(buf, sizeof(buf), stdin) {
-			        log.Fatal("I/O error while reading shares")
-						}
-		*/
-		//buf[strcspn(buf, "\r\n")] = '\0'
 		/*
 						a = strchr(buf, '-')
 						if !a {
@@ -537,15 +508,12 @@ func combine(opt_threshold int) {
 		//mpz_set_ui(x, j)
 		//mpz_init_set_ui(A[opt_threshold-1][i], 1)
 		for j := opt_threshold - 2; j >= 0; j-- {
-			//mpz_init(A[j][i])
 			//field_mult(A[j][i], A[j+1][i], x)
 		}
-		//mpz_init(y[i])
 		//field_import(&y[i], string(b), 1)
 		//field_mult(x, x, A[0][i])
 		//field_add(y[i], y[i], x)
 	}
-	//mpz_clear(x)
 	/*
 		if restore_secret(opt_threshold, A, y) != 0 {
 			log.Fatal("shares inconsistent. Perhaps a single share was used twice")
@@ -561,17 +529,9 @@ func combine(opt_threshold int) {
 	}
 
 	if !opt_quiet {
-		//fprintf(stderr, "Resulting secret: ")
+		fmt.Print("Resulting secret: ")
 	}
 	field_print(y[opt_threshold-1], opt_hex)
-
-	for i := 0; i < opt_threshold; i++ {
-		for j := 0; j < opt_threshold; j++ {
-			//mpz_clear(A[i][j])
-		}
-		//mpz_clear(y[i])
-	}
-	//mpz_clear(poly)
 }
 
 func main() {

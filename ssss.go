@@ -32,9 +32,9 @@ import (
 	"flag"
 	"fmt"
 	//big "github.com/ncw/gmp"
+	"crypto/rand"
 	"log"
 	"math/big"
-	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -223,8 +223,9 @@ func field_invert(z, x *big.Int) {
 
 func cprng_read(x *big.Int) {
 	buf := make([]byte, degree/8)
-	for i := range buf {
-		buf[i] = byte(rand.Uint32()) // TODO secure
+	_, err := rand.Read(buf)
+	if err != nil {
+		log.Fatal("rand error")
 	}
 	x.SetBytes(buf)
 }
@@ -275,10 +276,14 @@ const (
 )
 
 func encode_mpz(x *big.Int, encdecmode encdec) {
-	v := make([]uint8, (MAXDEGREE+8)/16*2)
-	// TODO
-	//var t uint32
-	//mpz_export(v, &t, -1, 2, 1, 0, x)
+	ln := int((degree + 8) / 16 * 2)
+	v := make([]uint8, ln)
+	v2 := x.Bytes()
+	v3 := make([]uint8, ln)
+	copy(v3[ln-len(v2):], v2)
+	for i := 0; i < ln; i++ {
+		v[i] = v3[(ln-1)-(i/2)*2-(1-(i%2))]
+	}
 	if degree%16 == 8 {
 		v[degree/8-1] = v[degree/8]
 	}
@@ -297,8 +302,11 @@ func encode_mpz(x *big.Int, encdecmode encdec) {
 		v[degree/8] = v[degree/8-1]
 		v[degree/8-1] = 0
 	}
-	// TODO
-	//mpz_import(x, (degree+8)/16, -1, 2, 1, 0, v)
+	for i := 0; i < ln; i++ {
+		v3[(ln-1)-(i/2)*2-(1-(i%2))] = v[i]
+	}
+	copy(v2, v3[ln-len(v2):])
+	x.SetBytes(v2)
 	if uint(mpz_sizeinbits(x)) > degree {
 		log.Fatal("mpz_sizeinbits(x) > degree")
 	}

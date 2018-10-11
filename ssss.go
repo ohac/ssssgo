@@ -41,7 +41,6 @@ import (
 )
 
 var VERSION string = "0.5"
-var RANDOM_SOURCE string = "/dev/random"
 var MAXDEGREE int = 1024
 var MAXTOKENLEN int = 128
 var MAXLINELEN int = (MAXTOKENLEN + 1 + 10 + 1 + MAXDEGREE/4 + 10)
@@ -71,9 +70,6 @@ var opt_token string
 var degree uint
 
 var poly big.Int
-
-// define mpz_lshift(A, B, l) mpz_mul_2exp(A, B, l)
-// define mpz_sizeinbits(A) (mpz_cmp_ui(A, 0) ? mpz_sizeinbase(A, 2) : 0)
 
 // emergency abort and warning functions
 
@@ -148,8 +144,6 @@ func field_print(x big.Int, hexmode bool) {
 			warn = warn || !printable
 			if printable {
 				fmt.Printf("%c", b)
-			} else if hexmode {
-				fmt.Printf("%02x", b) // TODO
 			} else {
 				fmt.Printf(".")
 			}
@@ -170,7 +164,6 @@ func field_add(z, x, y *big.Int) {
 func field_mult(z, x, y *big.Int) {
 	var b big.Int
 	var i uint
-	// assert(z != y)
 	b.Set(x)
 	if y.Bit(0) != 0 {
 		z.Set(&b)
@@ -188,36 +181,44 @@ func field_mult(z, x, y *big.Int) {
 	}
 }
 
+func mpz_sizeinbits(A *big.Int) int {
+	var zero big.Int
+	zero.SetUint64(0)
+	if A.Cmp(&zero) == 0 {
+		return 0
+	} else {
+		return A.BitLen()
+	}
+}
+
 func field_invert(z, x *big.Int) {
-	var u, v, g, h, one big.Int
-	//assert(mpz_cmp_ui(x, 0))
-	u = *x
-	v = poly
+	var u, v, g, h, one, zero big.Int
+	zero.SetUint64(0)
+	if x.Cmp(&zero) == 0 {
+		log.Fatal("x == 0")
+	}
+	u.Set(x)
+	v.Set(&poly)
 	g.SetUint64(0)
 	z.SetUint64(1)
 	one.SetUint64(1)
 	for u.Cmp(&one) != 0 {
-		// TODO
-		i := 0 // TODO
+		i := mpz_sizeinbits(&u) - mpz_sizeinbits(&v)
+		if i < 0 {
+			var tmp big.Int
+			tmp.Set(&v)
+			v.Set(&u)
+			u.Set(&tmp)
+			tmp.Set(z)
+			z.Set(&g)
+			g.Set(&tmp)
+			i = -i
+		}
 		h.Lsh(&v, uint(i))
 		u.Xor(&u, &h)
 		h.Lsh(&g, uint(i))
 		z.Xor(z, &h)
 	}
-	/*
-						for mpz_cmp_ui(u, 1) {
-		          i := mpz_sizeinbits(u) - mpz_sizeinbits(v)
-							if i < 0 {
-								//mpz_swap(u, v)
-								//mpz_swap(z, g)
-								i = -i
-							}
-							//mpz_lshift(h, v, i)
-				      u.Xor(&u, &h)
-							//mpz_lshift(h, g, i)
-				      z.Xor(&z, &h)
-						}
-	*/
 }
 
 func cprng_read(x *big.Int) {
@@ -275,6 +276,7 @@ const (
 
 func encode_mpz(x *big.Int, encdecmode encdec) {
 	v := make([]uint8, (MAXDEGREE+8)/16*2)
+	// TODO
 	//var t uint32
 	//mpz_export(v, &t, -1, 2, 1, 0, x)
 	if degree%16 == 8 {
@@ -295,14 +297,17 @@ func encode_mpz(x *big.Int, encdecmode encdec) {
 		v[degree/8] = v[degree/8-1]
 		v[degree/8-1] = 0
 	}
+	// TODO
 	//mpz_import(x, (degree+8)/16, -1, 2, 1, 0, v)
-	//assert(mpz_sizeinbits(x) <= degree)
+	if uint(mpz_sizeinbits(x)) > degree {
+		log.Fatal("mpz_sizeinbits(x) > degree")
+	}
 }
 
 // evaluate polynomials efficiently
 
 func horner(n int, y, x *big.Int, coeff []*big.Int) {
-	y.Set(x) //mpz_set(y, x)
+	y.Set(x)
 	for i := n - 1; i != 0; i-- {
 		field_add(y, y, coeff[i])
 		field_mult(y, y, x)
@@ -313,13 +318,12 @@ func horner(n int, y, x *big.Int, coeff []*big.Int) {
 // calculate the secret from a set of shares solving a linear equation system
 
 func MPZ_SWAP(A, B, h *big.Int) {
-	*h = *A
-	*A = *B
-	*B = *h
+	h.Set(A)
+	A.Set(B)
+	B.Set(h)
 }
 
-func restore_secret(n int, A [][]big.Int, b []big.Int) bool {
-	AA := A // TODO big.Int (*AA)[n] = (big.Int (*)[n])A
+func restore_secret(n int, AA [][]big.Int, b []big.Int) bool {
 	var i, j, k int
 	var h big.Int
 	var zero big.Int

@@ -443,7 +443,7 @@ func split(opt_threshold, opt_number, opt_security int) {
 
 	var x, y big.Int
 	for i := 0; i < opt_number; i++ {
-		x.SetUint64(uint64(i + 1)) // mpz_set_ui(x, i+1)
+		x.SetUint64(uint64(i + 1))
 		horner(opt_threshold, &y, &x, coeff)
 		if opt_token != "" {
 			fmt.Printf("%s-", opt_token)
@@ -539,26 +539,28 @@ func main() {
 	// TODO echo off
 
 	opt_showversion := flag.Bool("v", false, "show version")
-	opt_diffusion := flag.Bool("D", false, "opt_diffusion")
+	opt_diffusion_p := flag.Bool("D", true, "opt_diffusion")
 	opt_help := flag.Bool("h", false, "help")
-	opt_quiet := flag.Bool("q", false, "quiet")
-	opt_QUIET := flag.Bool("Q", false, "QUIET")
-	opt_hex := flag.Bool("x", false, "hex")
+	opt_quiet_p := flag.Bool("q", false, "quiet")
+	opt_QUIET_p := flag.Bool("Q", false, "QUIET")
+	opt_hex_p := flag.Bool("x", false, "hex")
 
 	opt_security := flag.Int("s", 0, "security")
 	opt_threshold := flag.Int("t", 2, "threshold")
 	opt_number := flag.Int("n", 3, "number")
-	opt_token := flag.String("w", "", "token")
-
-	_ = opt_diffusion
-	_ = opt_hex
+	opt_token_p := flag.String("w", "", "token")
 
 	flag.Parse()
 
-	if *opt_QUIET {
+	opt_quiet = *opt_quiet_p
+	opt_QUIET = *opt_QUIET_p
+	opt_diffusion = *opt_diffusion_p
+	opt_hex = *opt_hex_p
+	opt_token = *opt_token_p
+
+	if opt_QUIET {
 		opt_quiet = opt_QUIET
 	}
-	_ = opt_quiet
 
 	args := flag.Args()
 	if len(args) == 0 {
@@ -593,7 +595,7 @@ func main() {
 			log.Fatal("invalid parameters: invalid security level")
 		}
 
-		if *opt_token != "" && len(*opt_token) > MAXTOKENLEN {
+		if opt_token != "" && len(opt_token) > MAXTOKENLEN {
 			log.Fatal("invalid parameters: token too long")
 		}
 		split(*opt_threshold, *opt_number, *opt_security)
